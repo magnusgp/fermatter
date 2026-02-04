@@ -1,7 +1,8 @@
 import { motion } from "framer-motion"
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { useAuth } from "@/lib/auth"
 import {
   Accordion,
   AccordionContent,
@@ -19,9 +20,33 @@ import {
   Users,
   Star,
   FileText,
+  LogOut,
+  Loader2,
 } from "lucide-react"
+import { useEffect, useRef } from "react"
 
 export function LandingPage() {
+  const { user, isAuthenticated, isLoading, signIn, signOut } = useAuth()
+  const navigate = useNavigate()
+  const pendingNavigate = useRef(false)
+
+  // Navigate to dashboard after successful sign-in
+  useEffect(() => {
+    if (pendingNavigate.current && isAuthenticated) {
+      pendingNavigate.current = false
+      navigate('/dashboard')
+    }
+  }, [isAuthenticated, navigate])
+
+  const handleGetStarted = async () => {
+    if (isAuthenticated) {
+      navigate('/dashboard')
+    } else {
+      pendingNavigate.current = true
+      await signIn()
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -45,12 +70,40 @@ export function LandingPage() {
                   FAQ
                 </a>
               </nav>
-              <Link to="/editor">
-                <Button>
-                  Open Editor
+              
+              {isLoading ? (
+                <Button disabled>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                </Button>
+              ) : isAuthenticated && user ? (
+                <div className="flex items-center gap-3">
+                  <Link to="/dashboard">
+                    <Button>
+                      Dashboard
+                      <ArrowRight className="ml-2 w-4 h-4" />
+                    </Button>
+                  </Link>
+                  <div className="flex items-center gap-2">
+                    <img
+                      src={user.imageUrl}
+                      alt={user.name}
+                      className="w-8 h-8 rounded-full"
+                    />
+                    <button
+                      onClick={signOut}
+                      className="text-muted-foreground hover:text-foreground transition"
+                      title="Sign out"
+                    >
+                      <LogOut className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <Button onClick={handleGetStarted}>
+                  Sign In
                   <ArrowRight className="ml-2 w-4 h-4" />
                 </Button>
-              </Link>
+              )}
             </div>
           </div>
         </div>
@@ -81,12 +134,18 @@ export function LandingPage() {
                 work.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Link to="/editor">
-                  <Button size="lg" className="text-base w-full sm:w-auto">
-                    Try Fermatter Free
-                    <ArrowRight className="ml-2 w-4 h-4" />
-                  </Button>
-                </Link>
+                <Button 
+                  size="lg" 
+                  className="text-base w-full sm:w-auto"
+                  onClick={handleGetStarted}
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  ) : null}
+                  {isAuthenticated ? 'Open Editor' : 'Try Fermatter Free'}
+                  <ArrowRight className="ml-2 w-4 h-4" />
+                </Button>
                 <Button size="lg" variant="outline" className="text-base" asChild>
                   <a href="#how-it-works">See How It Works</a>
                 </Button>
@@ -334,15 +393,18 @@ export function LandingPage() {
             Start getting smart feedback that respects your voice. No credit
             card required.
           </p>
-          <Link to="/editor">
-            <Button
-              size="lg"
-              className="bg-white text-blue-600 hover:bg-blue-50 text-base"
-            >
-              Try Fermatter Free
-              <ArrowRight className="ml-2 w-4 h-4" />
-            </Button>
-          </Link>
+          <Button
+            size="lg"
+            className="bg-white text-blue-600 hover:bg-blue-50 text-base"
+            onClick={handleGetStarted}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+            ) : null}
+            {isAuthenticated ? 'Open Editor' : 'Try Fermatter Free'}
+            <ArrowRight className="ml-2 w-4 h-4" />
+          </Button>
         </div>
       </section>
 

@@ -23,6 +23,18 @@ steps:
       - "Dockerfile.prod"
       - "--build-arg"
       - "VITE_API_BASE_URL=https://backend-api-225093279154.europe-west6.run.app"
+      - "--build-arg"
+      - "VITE_FIREBASE_API_KEY=${_FIREBASE_API_KEY}"
+      - "--build-arg"
+      - "VITE_FIREBASE_AUTH_DOMAIN=${_FIREBASE_AUTH_DOMAIN}"
+      - "--build-arg"
+      - "VITE_FIREBASE_PROJECT_ID=${_FIREBASE_PROJECT_ID}"
+      - "--build-arg"
+      - "VITE_FIREBASE_STORAGE_BUCKET=${_FIREBASE_STORAGE_BUCKET}"
+      - "--build-arg"
+      - "VITE_FIREBASE_MESSAGING_SENDER_ID=${_FIREBASE_MESSAGING_SENDER_ID}"
+      - "--build-arg"
+      - "VITE_FIREBASE_APP_ID=${_FIREBASE_APP_ID}"
       - "-t"
       - "gcr.io/$PROJECT_ID/frontend-ui"
       - "."
@@ -90,3 +102,12 @@ images:
 # Build options
 options:
   logging: CLOUD_LOGGING_ONLY
+
+# Substitution variables - override these when triggering the build
+substitutions:
+  _FIREBASE_API_KEY: ""
+  _FIREBASE_AUTH_DOMAIN: ""
+  _FIREBASE_PROJECT_ID: ""
+  _FIREBASE_STORAGE_BUCKET: ""
+  _FIREBASE_MESSAGING_SENDER_ID: ""
+  _FIREBASE_APP_ID: ""
