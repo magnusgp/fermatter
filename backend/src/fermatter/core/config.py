@@ -22,7 +22,7 @@ class Settings:
         default_factory=lambda: os.getenv("OPENAI_API_KEY", "")
     )
     openai_model: str = field(
-        default_factory=lambda: os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+        default_factory=lambda: os.getenv("OPENAI_MODEL", "gpt-5-nano-2025-08-07")
     )
     openai_max_output_tokens: int = field(
         default_factory=lambda: int(os.getenv("OPENAI_MAX_OUTPUT_TOKENS", "600"))
