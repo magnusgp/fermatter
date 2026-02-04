@@ -13,6 +13,7 @@ app = FastAPI(
     title="Fermatter API",
     description="Structured writing feedback API",
     version="0.1.0",
+    root_path="/api",  # Important: tells FastAPI it's behind a proxy at /api
 )
 
 # CORS middleware for frontend development

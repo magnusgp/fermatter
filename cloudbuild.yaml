@@ -22,7 +22,7 @@ steps:
       - "-f"
       - "Dockerfile.prod"
       - "--build-arg"
-      - "VITE_API_BASE_URL=https://backend-api-225093279154.europe-west6.run.app"
+      - "VITE_API_BASE_URL=/api"
       - "-t"
       - "gcr.io/$PROJECT_ID/frontend-ui"
       - "."
