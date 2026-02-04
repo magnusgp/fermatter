@@ -250,18 +250,6 @@ export function FeedbackPanel({
         )}
       </h3>
 
-      {/* Warning banner when LLM analysis failed */}
-      {meta?.warning && (
-        <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-950 dark:border-amber-800">
-          <div className="flex items-start gap-2">
-            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
-            <p className="text-sm text-amber-700 dark:text-amber-300">
-              {meta.warning}
-            </p>
-          </div>
-        </div>
-      )}
-
       <div className="space-y-2">
         {isLoading ? (
           <div className="space-y-3">

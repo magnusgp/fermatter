@@ -341,14 +341,13 @@ async def analyze_async(
 
     observations: list[Observation] = []
     used_llm = False
-    warning: str | None = None
 
     # Try LLM analysis if enabled
     if settings.use_llm and settings.openai_api_key:
         sources_context = format_sources_for_prompt(
             sources.library_ids, sources.user
         )
-        llm_observations, success, error_msg = await call_openai_analysis(
+        llm_observations, success = await call_openai_analysis(
             text=analyze_text,
             mode=mode,
             sources_context=sources_context,
@@ -358,9 +357,6 @@ async def analyze_async(
         if success:
             observations = llm_observations
             used_llm = True
-        elif error_msg:
-            # LLM failed, will fall back to heuristics with warning
-            warning = f"AI analysis failed: {error_msg}. Using basic analysis instead."
 
     # Fall back to heuristics if LLM didn't work
     if not used_llm:
@@ -387,7 +383,6 @@ async def analyze_async(
             paragraph_count=len(paragraphs),
             latency_ms=latency_ms,
             used_llm=used_llm,
-            warning=warning,
         ),
     )
 
