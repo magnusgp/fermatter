@@ -263,7 +263,7 @@ async def call_openai_analysis(
             response = client.chat.completions.create(
                 model=settings.openai_model,
                 messages=messages,  # type: ignore
-                # max_tokens=settings.openai_max_output_tokens,
+                max_tokens=settings.openai_max_output_tokens,
                 temperature=settings.openai_temperature,
             )
 
