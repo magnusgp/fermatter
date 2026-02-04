@@ -1,22 +1,34 @@
 """Text analysis service.
 
-This module contains the core analysis logic. Currently implements
-deterministic heuristics. Structured to allow easy addition of
-LLM-based analysis in the future.
+This module contains the core analysis logic. Supports both
+deterministic heuristics and LLM-based analysis.
 """
 
+import asyncio
 import hashlib
 import re
+import time
 import uuid
 from typing import Optional
 
+from fermatter.core.config import settings
 from fermatter.models.schemas import (
+    AnalysisMode,
+    AnalysisScope,
     AnalyzeResponse,
     Meta,
     Observation,
     ObservationType,
+    ScopeType,
     Snapshot,
+    SourcesInput,
+    SourceUsed,
     UnstableParagraph,
+)
+from fermatter.services.openai_client import call_openai_analysis
+from fermatter.services.sources_library import (
+    format_sources_for_prompt,
+    get_source_by_id,
 )
 
 
@@ -97,15 +109,20 @@ def _check_long_paragraphs(paragraphs: list[str]) -> list[Observation]:
     for idx, para in enumerate(paragraphs):
         word_count = len(para.split())
         if word_count > 150:
+            # Extract anchor text (first few words)
+            words = para.split()[:6]
+            anchor = " ".join(words) + "..."
             observations.append(
                 Observation(
                     id=_generate_id(),
                     type=ObservationType.STRUCTURE,
-                    severity=2,
+                    severity=3,
                     paragraph=idx,
+                    anchor_text=anchor,
                     title="Long paragraph",
                     note=f"This paragraph has {word_count} words. Consider breaking it into smaller chunks for readability.",
                     question="Could this paragraph be split into more focused sections?",
+                    source_ids=[],
                 )
             )
     return observations
@@ -139,15 +156,27 @@ def _check_missing_evidence(paragraphs: list[str]) -> list[Observation]:
         has_evidence = any(keyword in para_lower for keyword in evidence_keywords)
 
         if has_claim and not has_evidence:
+            # Find the claim phrase for anchor
+            anchor = None
+            for pattern in claim_patterns:
+                match = re.search(pattern, para_lower)
+                if match:
+                    start = max(0, match.start() - 10)
+                    end = min(len(para), match.end() + 20)
+                    anchor = para[start:end].strip()
+                    break
+
             observations.append(
                 Observation(
                     id=_generate_id(),
                     type=ObservationType.MISSING_EVIDENCE,
-                    severity=2,
+                    severity=3,
                     paragraph=idx,
+                    anchor_text=anchor,
                     title="Unsupported claim",
                     note="This paragraph contains strong claims without apparent supporting evidence.",
                     question="What evidence or reasoning supports this claim?",
+                    source_ids=[],
                 )
             )
 
@@ -158,24 +187,32 @@ def _check_unclear_claims(paragraphs: list[str]) -> list[Observation]:
     """Check for vague or unclear statements."""
     observations = []
     vague_patterns = [
-        r"\b(things|stuff|something|somehow|somewhat)\b",
-        r"\b(very|really|quite|rather)\s+(good|bad|important|interesting)\b",
-        r"\b(etc|and so on|and so forth)\b",
+        (r"\b(things|stuff|something|somehow|somewhat)\b", "vague noun"),
+        (r"\b(very|really|quite|rather)\s+(good|bad|important|interesting)\b", "vague modifier"),
+        (r"\b(etc|and so on|and so forth)\b", "trailing vagueness"),
     ]
 
     for idx, para in enumerate(paragraphs):
         para_lower = para.lower()
-        for pattern in vague_patterns:
-            if re.search(pattern, para_lower):
+        for pattern, reason in vague_patterns:
+            match = re.search(pattern, para_lower)
+            if match:
+                # Get anchor around the match
+                start = max(0, match.start() - 5)
+                end = min(len(para), match.end() + 15)
+                anchor = para[start:end].strip()
+
                 observations.append(
                     Observation(
                         id=_generate_id(),
                         type=ObservationType.UNCLEAR_CLAIM,
-                        severity=1,
+                        severity=2,
                         paragraph=idx,
+                        anchor_text=anchor,
                         title="Vague language",
-                        note="This paragraph contains vague language that could be more specific.",
+                        note=f"This paragraph contains vague language ({reason}) that could be more specific.",
                         question="Can you be more specific about what you mean here?",
+                        source_ids=[],
                     )
                 )
                 break  # Only one observation per paragraph for this check
@@ -183,50 +220,35 @@ def _check_unclear_claims(paragraphs: list[str]) -> list[Observation]:
     return observations
 
 
-def analyze(
-    text: str,
-    snapshots: Optional[list[Snapshot]] = None,
-    goal: Optional[str] = None,  # noqa: ARG001 - reserved for future use
-) -> AnalyzeResponse:
-    """Analyze text and return structured feedback.
-
-    This is the main entry point for text analysis. Currently uses
-    deterministic heuristics. Structured to allow easy addition of
-    LLM-based analysis in the future via a provider pattern.
-
-    Args:
-        text: The current text to analyze.
-        snapshots: Historical snapshots for instability analysis.
-        goal: Optional writing goal (reserved for future use).
-
-    Returns:
-        AnalyzeResponse with observations, instability info, and metadata.
-    """
-    snapshots = snapshots or []
-    paragraphs = compute_paragraphs(text)
-
-    # Collect observations from various heuristics
+def _run_heuristic_analysis(paragraphs: list[str]) -> list[Observation]:
+    """Run all heuristic checks and return observations."""
     observations: list[Observation] = []
     observations.extend(_check_long_paragraphs(paragraphs))
     observations.extend(_check_missing_evidence(paragraphs))
     observations.extend(_check_unclear_claims(paragraphs))
+    return observations
 
-    # Compute instability from snapshots
-    rewrite_counts = compute_instability(snapshots)
+
+def _compute_instability_observations(
+    rewrite_counts: dict[int, int],
+) -> tuple[list[Observation], list[UnstableParagraph]]:
+    """Convert rewrite counts to observations and unstable paragraph info."""
+    observations: list[Observation] = []
     unstable: list[UnstableParagraph] = []
 
     for para_idx, count in rewrite_counts.items():
         if count >= 2:  # Threshold for "unstable"
-            # Add instability observation
             observations.append(
                 Observation(
                     id=_generate_id(),
                     type=ObservationType.INSTABILITY,
-                    severity=1 if count < 4 else 2,
+                    severity=2 if count < 4 else 3,
                     paragraph=para_idx,
+                    anchor_text=None,
                     title="Frequently rewritten",
                     note=f"This paragraph has been rewritten {count} times.",
                     question="Are you struggling to express this idea clearly?",
+                    source_ids=[],
                 )
             )
             unstable.append(
@@ -237,33 +259,153 @@ def analyze(
                 )
             )
 
-    return AnalyzeResponse(
-        observations=observations,
-        unstable=unstable,
-        meta=Meta(paragraph_count=len(paragraphs)),
-    )
+    return observations, unstable
 
 
-# Placeholder for future LLM integration
-async def analyze_with_llm(
+def _collect_sources_used(
+    observations: list[Observation],
+    sources_input: SourcesInput,
+) -> list[SourceUsed]:
+    """Collect all sources that were actually cited in observations."""
+    cited_ids: set[str] = set()
+    for obs in observations:
+        cited_ids.update(obs.source_ids)
+
+    sources_used: list[SourceUsed] = []
+    for sid in cited_ids:
+        if sid.startswith("S"):
+            source = get_source_by_id(sid)
+            if source:
+                sources_used.append(
+                    SourceUsed(id=source.id, title=source.title, url=source.url)
+                )
+        elif sid.startswith("U"):
+            # User-provided source
+            try:
+                idx = int(sid[1:]) - 1
+                if 0 <= idx < len(sources_input.user):
+                    user_src = sources_input.user[idx]
+                    sources_used.append(
+                        SourceUsed(id=sid, title="User source", url=user_src)
+                    )
+            except ValueError:
+                pass
+
+    return sources_used
+
+
+async def analyze_async(
     text: str,
     snapshots: Optional[list[Snapshot]] = None,
     goal: Optional[str] = None,
-    provider: Optional[str] = None,  # noqa: ARG001 - e.g., "openai", "anthropic"
+    mode: AnalysisMode = AnalysisMode.SCIENTIFIC,
+    sources: Optional[SourcesInput] = None,
+    scope: Optional[AnalysisScope] = None,
 ) -> AnalyzeResponse:
-    """Analyze text using an LLM provider.
+    """Analyze text and return structured feedback (async version).
 
-    TODO: Implement when LLM integration is needed.
-    For now, falls back to deterministic analysis.
+    This is the main entry point for text analysis. Uses LLM if configured,
+    falls back to heuristics otherwise.
 
     Args:
         text: The current text to analyze.
         snapshots: Historical snapshots for instability analysis.
         goal: Optional writing goal.
-        provider: LLM provider to use.
+        mode: Analysis mode/tone.
+        sources: Sources configuration for citations.
+        scope: Analysis scope (document or selection).
 
     Returns:
         AnalyzeResponse with observations, instability info, and metadata.
     """
-    # Future: Call LLM API here
-    return analyze(text, snapshots, goal)
+    start_time = time.time()
+    snapshots = snapshots or []
+    sources = sources or SourcesInput()
+    scope = scope or AnalysisScope()
+
+    # Determine what text to analyze
+    if scope.type == ScopeType.SELECTION and scope.selection_text:
+        analyze_text = scope.selection_text
+        paragraphs = compute_paragraphs(analyze_text)
+        is_selection = True
+    else:
+        analyze_text = text
+        paragraphs = compute_paragraphs(text)
+        is_selection = False
+
+        # Filter to specific paragraphs if requested
+        if scope.paragraphs:
+            paragraphs = [
+                paragraphs[i] for i in scope.paragraphs if i < len(paragraphs)
+            ]
+
+    observations: list[Observation] = []
+    used_llm = False
+
+    # Try LLM analysis if enabled
+    if settings.use_llm and settings.openai_api_key:
+        sources_context = format_sources_for_prompt(
+            sources.library_ids, sources.user
+        )
+        llm_observations, success = await call_openai_analysis(
+            text=analyze_text,
+            mode=mode,
+            sources_context=sources_context,
+            paragraphs=paragraphs,
+            is_selection=is_selection,
+        )
+        if success:
+            observations = llm_observations
+            used_llm = True
+
+    # Fall back to heuristics if LLM didn't work
+    if not used_llm:
+        observations = _run_heuristic_analysis(paragraphs)
+
+    # Always compute instability from snapshots (for full document only)
+    unstable: list[UnstableParagraph] = []
+    if not is_selection:
+        rewrite_counts = compute_instability(snapshots)
+        instability_obs, unstable = _compute_instability_observations(rewrite_counts)
+        observations.extend(instability_obs)
+
+    # Collect sources that were actually cited
+    sources_used = _collect_sources_used(observations, sources)
+
+    # Calculate latency
+    latency_ms = int((time.time() - start_time) * 1000)
+
+    return AnalyzeResponse(
+        observations=observations,
+        unstable=unstable,
+        sources_used=sources_used,
+        meta=Meta(
+            paragraph_count=len(paragraphs),
+            latency_ms=latency_ms,
+            used_llm=used_llm,
+        ),
+    )
+
+
+def analyze(
+    text: str,
+    snapshots: Optional[list[Snapshot]] = None,
+    goal: Optional[str] = None,
+    mode: AnalysisMode = AnalysisMode.SCIENTIFIC,
+    sources: Optional[SourcesInput] = None,
+    scope: Optional[AnalysisScope] = None,
+) -> AnalyzeResponse:
+    """Analyze text and return structured feedback (sync wrapper).
+
+    Wraps the async version for use in sync contexts.
+    """
+    return asyncio.run(
+        analyze_async(
+            text=text,
+            snapshots=snapshots,
+            goal=goal,
+            mode=mode,
+            sources=sources,
+            scope=scope,
+        )
+    )
