@@ -1,42 +1,54 @@
-import { useCallback, useRef, useEffect, useState } from 'react'
+import { useCallback, useRef, useEffect, useState, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Send, Clock, MousePointer2 } from 'lucide-react'
+import { Send, Clock } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import type { Observation } from '@/lib/types'
 
 interface EditorProps {
   text: string
   onTextChange: (text: string) => void
   onAnalyze: () => void
-  onAnalyzeSelection?: (selectionText: string) => void
   isAnalyzing: boolean
   snapshotCount: number
-  highlightedParagraph: number | null
+  activeObservation: Observation | null
+  hoveredObservation: Observation | null
+  paragraphRefs: React.MutableRefObject<Map<number, HTMLDivElement>>
 }
 
 /**
- * Text editor component with paragraph numbers and selection analysis.
- * Handles text input and triggers analysis.
+ * Split text into paragraphs (separated by blank lines).
+ */
+export function splitIntoParagraphs(text: string): string[] {
+  return text.split(/\n\s*\n/).filter((p) => p.trim())
+}
+
+/**
+ * Text editor component with paragraph-based rendering for highlight mapping.
  */
 export function Editor({
   text,
   onTextChange,
   onAnalyze,
-  onAnalyzeSelection,
   isAnalyzing,
   snapshotCount,
-  highlightedParagraph,
+  activeObservation,
+  hoveredObservation,
+  paragraphRefs,
 }: EditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const [selection, setSelection] = useState<string | null>(null)
-  const [selectionPosition, setSelectionPosition] = useState<{ top: number; left: number } | null>(null)
+  const [isEditing, setIsEditing] = useState(true)
+
+  // Parse paragraphs for display
+  const paragraphs = useMemo(() => splitIntoParagraphs(text), [text])
 
   // Auto-resize textarea
   useEffect(() => {
-    if (textareaRef.current) {
+    if (textareaRef.current && isEditing) {
       textareaRef.current.style.height = 'auto'
-      textareaRef.current.style.height = `${Math.max(400, textareaRef.current.scrollHeight)}px`
+      textareaRef.current.style.height = `${Math.max(300, textareaRef.current.scrollHeight)}px`
     }
-  }, [text])
+  }, [text, isEditing])
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -56,136 +68,134 @@ export function Editor({
     [onAnalyze]
   )
 
-  // Handle text selection
-  const handleSelect = useCallback(() => {
-    if (!textareaRef.current) return
+  // Determine which paragraph should be highlighted
+  const highlightedParagraph = activeObservation?.paragraph ?? hoveredObservation?.paragraph ?? null
+  const highlightAnchor = activeObservation?.anchor_text || hoveredObservation?.anchor_text || null
 
-    const selectedText = textareaRef.current.value.substring(
-      textareaRef.current.selectionStart,
-      textareaRef.current.selectionEnd
+  // Register paragraph refs
+  const registerParagraphRef = useCallback(
+    (index: number, el: HTMLDivElement | null) => {
+      if (el) {
+        paragraphRefs.current.set(index, el)
+      } else {
+        paragraphRefs.current.delete(index)
+      }
+    },
+    [paragraphRefs]
+  )
+
+  // Highlight anchor text within paragraph
+  const renderParagraphWithHighlight = (para: string, isTarget: boolean, anchor: string | null) => {
+    if (!isTarget || !anchor) {
+      return para
+    }
+
+    const lowerPara = para.toLowerCase()
+    const lowerAnchor = anchor.toLowerCase()
+    const index = lowerPara.indexOf(lowerAnchor)
+
+    if (index === -1) {
+      return para
+    }
+
+    const before = para.slice(0, index)
+    const match = para.slice(index, index + anchor.length)
+    const after = para.slice(index + anchor.length)
+
+    return (
+      <>
+        {before}
+        <mark className="bg-yellow-300 dark:bg-yellow-700 px-0.5 rounded">{match}</mark>
+        {after}
+      </>
     )
-
-    if (selectedText && selectedText.trim().length > 10) {
-      setSelection(selectedText)
-      // Position the button near the selection (simplified positioning)
-      const rect = textareaRef.current.getBoundingClientRect()
-      setSelectionPosition({
-        top: rect.top + 60, // Below the header
-        left: rect.left + rect.width / 2,
-      })
-    } else {
-      setSelection(null)
-      setSelectionPosition(null)
-    }
-  }, [])
-
-  // Clear selection when clicking elsewhere
-  const handleBlur = useCallback(() => {
-    // Delay to allow button click to register
-    setTimeout(() => {
-      setSelection(null)
-      setSelectionPosition(null)
-    }, 200)
-  }, [])
-
-  // Handle analyze selection
-  const handleAnalyzeSelection = useCallback(() => {
-    if (selection && onAnalyzeSelection) {
-      onAnalyzeSelection(selection)
-      setSelection(null)
-      setSelectionPosition(null)
-    }
-  }, [selection, onAnalyzeSelection])
-
-  // Compute paragraphs for visual display
-  const paragraphs = text.split(/\n\s*\n/).filter((p) => p.trim())
+  }
 
   return (
-    <Card className="h-full flex flex-col relative">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-        <CardTitle className="text-lg">Editor</CardTitle>
+    <Card className="h-full flex flex-col">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 border-b">
+        <CardTitle className="text-base font-medium">Document</CardTitle>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1 text-sm text-muted-foreground">
-            <Clock className="h-4 w-4" />
-            <span>{snapshotCount} snapshots</span>
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Clock className="h-3 w-3" />
+            <span>{snapshotCount}</span>
           </div>
           <Button
             onClick={onAnalyze}
             disabled={isAnalyzing || !text.trim()}
             size="sm"
+            className="h-8"
           >
             {isAnalyzing ? (
               <span className="animate-pulse">Analyzing...</span>
             ) : (
               <>
-                <Send className="h-4 w-4 mr-2" />
+                <Send className="h-3 w-3 mr-1.5" />
                 Analyze
               </>
             )}
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="flex-1 flex flex-col relative">
-        {/* Paragraph indicators on the left */}
-        <div className="absolute left-0 top-0 w-8 flex flex-col gap-2 pt-2 text-xs text-muted-foreground font-mono">
-          {paragraphs.map((_, idx) => (
-            <div
-              key={idx}
-              className={`h-6 flex items-center justify-center rounded transition-colors ${
-                highlightedParagraph === idx
-                  ? 'bg-yellow-200 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200'
-                  : ''
-              }`}
-            >
-              {idx + 1}
-            </div>
-          ))}
-        </div>
 
-        <textarea
-          ref={textareaRef}
-          value={text}
-          onChange={handleChange}
-          onKeyDown={handleKeyDown}
-          onSelect={handleSelect}
-          onBlur={handleBlur}
-          placeholder="Start writing here...
+      <CardContent className="flex-1 overflow-auto p-0">
+        {isEditing ? (
+          <div className="p-4">
+            <textarea
+              ref={textareaRef}
+              value={text}
+              onChange={handleChange}
+              onKeyDown={handleKeyDown}
+              placeholder="Start writing here...
 
-Separate paragraphs with blank lines. The analyzer will give you feedback on structure, clarity, and evidence.
+Separate paragraphs with blank lines.
+Press Ctrl+Enter (Cmd+Enter) to analyze."
+              className="w-full min-h-[300px] resize-none bg-transparent border-0 focus:outline-none focus:ring-0 text-sm leading-relaxed font-serif placeholder:text-muted-foreground/50"
+            />
+          </div>
+        ) : null}
 
-Press Ctrl+Enter (or Cmd+Enter) to analyze the full document.
-Select text to analyze just that portion."
-          className="flex-1 min-h-[400px] w-full resize-none rounded-md border border-input bg-background pl-10 pr-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-mono leading-relaxed"
-        />
-
-        {/* Selection analyze button */}
-        {selection && selectionPosition && onAnalyzeSelection && (
-          <div
-            className="fixed z-50 animate-in fade-in-0 zoom-in-95"
-            style={{
-              top: selectionPosition.top,
-              left: selectionPosition.left,
-              transform: 'translateX(-50%)',
-            }}
-          >
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={handleAnalyzeSelection}
-              disabled={isAnalyzing}
-              className="shadow-lg"
-            >
-              <MousePointer2 className="h-4 w-4 mr-2" />
-              Analyze Selection
-            </Button>
+        {/* Paragraph preview with highlights (shown alongside or as overlay) */}
+        {!isEditing && paragraphs.length > 0 && (
+          <div className="p-4 space-y-4">
+            {paragraphs.map((para, idx) => {
+              const isHighlighted = highlightedParagraph === idx
+              return (
+                <div
+                  key={idx}
+                  ref={(el) => registerParagraphRef(idx, el)}
+                  data-paragraph-index={idx}
+                  className={cn(
+                    'p-3 rounded-lg transition-all duration-200 border border-transparent',
+                    isHighlighted && 'bg-yellow-50 dark:bg-yellow-950/30 border-yellow-200 dark:border-yellow-800'
+                  )}
+                >
+                  <p className="text-sm leading-relaxed font-serif whitespace-pre-wrap">
+                    {renderParagraphWithHighlight(para, isHighlighted, highlightAnchor)}
+                  </p>
+                </div>
+              )
+            })}
           </div>
         )}
 
-        <p className="text-xs text-muted-foreground mt-2">
-          Tip: Separate paragraphs with blank lines. Press Ctrl+Enter to analyze.
-          {onAnalyzeSelection && ' Select text to analyze just that portion.'}
-        </p>
+        {/* Always show paragraph refs for connector positioning */}
+        {isEditing && paragraphs.length > 0 && (
+          <div className="absolute opacity-0 pointer-events-none" aria-hidden>
+            {paragraphs.map((_, idx) => (
+              <div
+                key={idx}
+                ref={(el) => registerParagraphRef(idx, el)}
+                data-paragraph-index={idx}
+              />
+            ))}
+          </div>
+        )}
       </CardContent>
+
+      <div className="px-4 py-2 border-t text-xs text-muted-foreground">
+        {paragraphs.length} paragraph{paragraphs.length !== 1 ? 's' : ''} · Ctrl+Enter to analyze
+      </div>
     </Card>
   )
 }
