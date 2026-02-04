@@ -21,7 +21,6 @@ steps:
       - "."
     dir: "frontend"
 
-
   # ==========================================
   # 3. PUSH: Upload Images to Registry
   # ==========================================
@@ -54,7 +53,7 @@ steps:
       - "8080" # Your specific python port
       # Pass the API key safely from the trigger/command line
       - "--set-env-vars"
-      - "OPENAI_API_KEY=$_OPENAI_API_KEY"
+      - "OPENAI_API_KEY=$_OPENAI_API_KEY,CORS_ORIGINS=https://frontend-ui-225093279154.europe-west6.run.app,http://localhost:5173,http://127.0.0.1:5173"
 
   # ==========================================
   # 5. DEPLOY: Frontend
