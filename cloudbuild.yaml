@@ -1,0 +1,80 @@
+steps:
+  # ==========================================
+  # 1. BACKEND: Build the Container Image
+  # ==========================================
+  - name: "gcr.io/cloud-builders/docker"
+    id: "build-backend"
+    args: ["build", "-t", "gcr.io/$PROJECT_ID/backend-api", "."]
+    dir: "backend" # Look inside the 'backend' folder
+
+  # ==========================================
+  # 2. FRONTEND: Build the Container Image
+  # ==========================================
+  - name: "gcr.io/cloud-builders/docker"
+    id: "build-frontend"
+    args:
+      - "build"
+      - "--build-arg"
+      - "VITE_API_BASE_URL=https://backend-api-225093279154.europe-west6.run.app"
+      - "-t"
+      - "gcr.io/$PROJECT_ID/frontend-ui"
+      - "."
+    dir: "frontend"
+
+
+  # ==========================================
+  # 3. PUSH: Upload Images to Registry
+  # ==========================================
+  # We push both images so they are available for Cloud Run to pull
+  - name: "gcr.io/cloud-builders/docker"
+    id: "push-images"
+    entrypoint: "bash"
+    args:
+      [
+        "-c",
+        "docker push gcr.io/$PROJECT_ID/backend-api && docker push gcr.io/$PROJECT_ID/frontend-ui",
+      ]
+
+  # ==========================================
+  # 4. DEPLOY: Backend
+  # ==========================================
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    id: "deploy-backend"
+    entrypoint: gcloud
+    args:
+      - "run"
+      - "deploy"
+      - "backend-api"
+      - "--image"
+      - "gcr.io/$PROJECT_ID/backend-api"
+      - "--region"
+      - "europe-west6"
+      - "--allow-unauthenticated"
+      - "--port"
+      - "8080" # Your specific python port
+      # Pass the API key safely from the trigger/command line
+      - "--set-env-vars"
+      - "OPENAI_API_KEY=$_OPENAI_API_KEY"
+
+  # ==========================================
+  # 5. DEPLOY: Frontend
+  # ==========================================
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    id: "deploy-frontend"
+    entrypoint: gcloud
+    args:
+      - "run"
+      - "deploy"
+      - "frontend-ui"
+      - "--image"
+      - "gcr.io/$PROJECT_ID/frontend-ui"
+      - "--region"
+      - "europe-west6"
+      - "--allow-unauthenticated"
+      - "--port"
+      - "8080"
+
+# Images to be displayed in the build logs
+images:
+  - "gcr.io/$PROJECT_ID/backend-api"
+  - "gcr.io/$PROJECT_ID/frontend-ui"

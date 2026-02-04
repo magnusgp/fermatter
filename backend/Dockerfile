@@ -13,10 +13,10 @@ COPY src ./src
 RUN uv venv /app/.venv && uv sync --no-dev
 
 # Expose port
-EXPOSE 8000
+EXPOSE 8080
 
 # Set PATH to use venv
 ENV PATH="/app/.venv/bin:$PATH"
 
 # Run the application
-CMD ["uvicorn", "fermatter.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "fermatter.main:app", "--host", "0.0.0.0", "--port", "8080"]
