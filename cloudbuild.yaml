@@ -84,3 +84,7 @@ steps:
 images:
   - "gcr.io/$PROJECT_ID/backend-api"
   - "gcr.io/$PROJECT_ID/frontend-ui"
+
+# Build options
+options:
+  logging: CLOUD_LOGGING_ONLY
