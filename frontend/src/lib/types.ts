@@ -61,6 +61,7 @@ export interface Meta {
   paragraph_count: number
   latency_ms: number
   used_llm: boolean
+  warning?: string // Warning if LLM analysis failed
 }
 
 export interface AnalyzeRequest {
