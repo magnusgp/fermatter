@@ -16,6 +16,25 @@ class Settings:
     env: str = field(default_factory=lambda: os.getenv("ENV", "development"))
     log_level: str = field(default_factory=lambda: os.getenv("LOG_LEVEL", "INFO"))
     cors_origins: List[str] = field(default_factory=lambda: _parse_cors_origins())
+    
+    # OpenAI settings
+    openai_api_key: str = field(
+        default_factory=lambda: os.getenv("OPENAI_API_KEY", "")
+    )
+    openai_model: str = field(
+        default_factory=lambda: os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+    )
+    openai_max_output_tokens: int = field(
+        default_factory=lambda: int(os.getenv("OPENAI_MAX_OUTPUT_TOKENS", "600"))
+    )
+    openai_temperature: float = field(
+        default_factory=lambda: float(os.getenv("OPENAI_TEMPERATURE", "0.2"))
+    )
+    
+    # Feature flags
+    use_llm: bool = field(
+        default_factory=lambda: os.getenv("USE_LLM", "true").lower() == "true"
+    )
 
 
 def _parse_cors_origins() -> List[str]:
@@ -27,3 +46,4 @@ def _parse_cors_origins() -> List[str]:
 
 
 settings = Settings()
+

@@ -2,7 +2,12 @@
  * API client for the Fermatter backend.
  */
 
-import type { AnalyzeRequest, AnalyzeResponse, HealthResponse } from './types'
+import type {
+  AnalyzeRequest,
+  AnalyzeResponse,
+  HealthResponse,
+  SourcesLibraryResponse,
+} from './types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
@@ -35,6 +40,19 @@ export async function checkHealth(): Promise<HealthResponse> {
     },
   })
   return handleResponse<HealthResponse>(response)
+}
+
+/**
+ * Get available library sources.
+ */
+export async function getSources(): Promise<SourcesLibraryResponse> {
+  const response = await fetch(`${API_BASE_URL}/sources`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+  return handleResponse<SourcesLibraryResponse>(response)
 }
 
 /**
