@@ -58,7 +58,7 @@ steps:
       - "--port"
       - "8080"
       - "--set-env-vars"
-      - "^:^CORS_ORIGINS=https://frontend-ui-225093279154.europe-west6.run.app,http://localhost:5173,http://127.0.0.1:5173"
+      - "CORS_ORIGINS=https://frontend-ui-225093279154.europe-west6.run.app"
       - "--update-secrets"
       - "OPENAI_API_KEY=openai-api-key:latest"
 
