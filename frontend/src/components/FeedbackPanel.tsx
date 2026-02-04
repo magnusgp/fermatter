@@ -98,7 +98,7 @@ function FeedbackCard({
       layout
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      ref={(el) => registerRef(obs.id, el)}
+      ref={(el: HTMLDivElement | null) => registerRef(obs.id, el)}
       className={cn(
         'mb-3 rounded-lg border bg-background p-3 shadow-sm transition-all cursor-pointer',
         isHovered && 'shadow-md ring-2 ring-blue-400/50'

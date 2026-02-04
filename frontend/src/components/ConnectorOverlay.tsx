@@ -68,7 +68,6 @@ export function ConnectorOverlay({
     const feedbackY = feedbackRect.top + feedbackRect.height / 2 - containerRect.top
 
     // Create bezier curve control points
-    const midX = (paraX + feedbackX) / 2
     const controlOffset = Math.min(40, Math.abs(feedbackX - paraX) / 3)
 
     setLine({

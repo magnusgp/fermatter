@@ -30,4 +30,3 @@ services:
       - ./frontend/src:/app/src
     depends_on:
       - backend
-    command: pnpm dev --host --port 5173

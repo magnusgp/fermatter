@@ -39,7 +39,6 @@ function splitIntoParagraphs(text: string): { id: string; content: string; start
 
 // Find absolute position of anchor text within full text
 function findAnchorPosition(
-  fullText: string,
   paragraphs: { start: number; end: number; content: string }[],
   paragraphIndex: number,
   anchorText: string
@@ -115,7 +114,6 @@ function App() {
     }
 
     const position = findAnchorPosition(
-      text,
       paragraphs,
       highlightedObservation.paragraph,
       highlightedObservation.anchor_text
@@ -129,8 +127,8 @@ function App() {
     const highlighted = text.slice(position.start, position.end)
     const after = text.slice(position.end)
 
-    // Return HTML with highlight mark
-    return `${escapeHtml(before)}<mark class="bg-blue-200 dark:bg-blue-700 rounded px-0.5">${escapeHtml(highlighted)}</mark>${escapeHtml(after)}`
+    // Return HTML with highlight mark - no px padding to avoid distortion
+    return `${escapeHtml(before)}<mark class="bg-yellow-200 dark:bg-yellow-600/50 rounded-sm">${escapeHtml(highlighted)}</mark>${escapeHtml(after)}`
   }, [text, highlightedObservation, paragraphs])
 
   // Sync scroll between textarea and highlight layer

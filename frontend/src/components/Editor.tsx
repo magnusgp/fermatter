@@ -37,7 +37,7 @@ export function Editor({
   paragraphRefs,
 }: EditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const [isEditing, setIsEditing] = useState(true)
+  const [isEditing] = useState(true)
 
   // Parse paragraphs for display
   const paragraphs = useMemo(() => splitIntoParagraphs(text), [text])
