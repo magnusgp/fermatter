@@ -135,23 +135,30 @@ def parse_llm_response(content: str) -> list[dict[str, Any]] | None:
     Returns:
         List of observation dicts, or None if parsing fails.
     """
+    import re
+    
     try:
-        # Try to extract JSON from the response
-        # Handle cases where the response might have markdown code blocks
         cleaned = content.strip()
-        if cleaned.startswith("```"):
-            # Remove markdown code blocks
-            lines = cleaned.split("\n")
-            json_lines = []
-            in_block = False
-            for line in lines:
-                if line.startswith("```"):
-                    in_block = not in_block
-                    continue
-                if in_block or not line.startswith("```"):
-                    json_lines.append(line)
-            cleaned = "\n".join(json_lines)
-
+        
+        # Strategy 1: Remove markdown code blocks if present
+        if "```" in cleaned:
+            # Extract content between code blocks
+            code_match = re.search(r"```(?:json)?\s*([\s\S]*?)```", cleaned)
+            if code_match:
+                cleaned = code_match.group(1).strip()
+            else:
+                # Remove all ``` markers
+                cleaned = re.sub(r"```(?:json)?\s*", "", cleaned)
+                cleaned = cleaned.replace("```", "").strip()
+        
+        # Strategy 2: Try to find JSON object in the response
+        if not cleaned.startswith("{") and not cleaned.startswith("["):
+            # Look for JSON object pattern
+            json_match = re.search(r'(\{[\s\S]*\})', cleaned)
+            if json_match:
+                cleaned = json_match.group(1)
+        
+        # Try to parse
         data = json.loads(cleaned)
 
         if isinstance(data, dict) and "observations" in data:
@@ -159,10 +166,12 @@ def parse_llm_response(content: str) -> list[dict[str, Any]] | None:
         elif isinstance(data, list):
             return data
         else:
-            logger.warning("Unexpected LLM response structure")
+            # Maybe the dict itself is an observation? Or has different structure
+            logger.warning(f"Unexpected LLM response structure: {list(data.keys()) if isinstance(data, dict) else type(data)}")
             return None
     except json.JSONDecodeError as e:
         logger.warning(f"Failed to parse LLM response as JSON: {e}")
+        logger.debug(f"Raw content was: {content[:500]}")
         return None
 
 
@@ -231,7 +240,7 @@ async def call_openai_analysis(
     sources_context: str,
     paragraphs: list[str],
     is_selection: bool = False,
-) -> tuple[list[Observation], bool]:
+) -> tuple[list[Observation], bool, str | None]:
     """Call OpenAI API for text analysis.
 
     Args:
@@ -242,12 +251,12 @@ async def call_openai_analysis(
         is_selection: Whether this is a selection analysis.
 
     Returns:
-        Tuple of (observations list, success boolean).
+        Tuple of (observations list, success boolean, error/warning message or None).
     """
     client = get_client()
     if client is None:
         logger.warning("OpenAI client not available (no API key)")
-        return [], False
+        return [], False, "OpenAI API key not configured"
 
     messages = build_analysis_prompt(
         text=text,
@@ -257,42 +266,67 @@ async def call_openai_analysis(
         is_selection=is_selection,
     )
 
-    max_retries = 2
+    max_retries = 3
+    last_error: str | None = None
+
     for attempt in range(max_retries):
         try:
+            # Use response_format to force JSON output
             response = client.chat.completions.create(
                 model=settings.openai_model,
                 messages=messages,  # type: ignore
                 max_tokens=settings.openai_max_output_tokens,
                 temperature=settings.openai_temperature,
+                response_format={"type": "json_object"},
             )
 
             content = response.choices[0].message.content
             if not content:
-                logger.warning("Empty response from OpenAI")
+                logger.warning(f"Empty response from OpenAI (attempt {attempt + 1}/{max_retries})")
+                last_error = "AI returned empty response"
                 continue
 
             raw_observations = parse_llm_response(content)
             if raw_observations is None:
-                # Retry with explicit JSON instruction
+                logger.warning(f"Failed to parse response (attempt {attempt + 1}/{max_retries})")
+                last_error = "AI returned invalid format"
+                
+                # Add correction message for next attempt
                 if attempt < max_retries - 1:
+                    messages.append({"role": "assistant", "content": content})
                     messages.append({
                         "role": "user",
-                        "content": "Please return ONLY valid JSON, no other text.",
+                        "content": (
+                            "That response was not in the correct format. "
+                            "Please return a JSON object with exactly this structure: "
+                            '{"observations": [{"type": "...", "severity": 1, "paragraph": 0, '
+                            '"anchor_text": "...", "title": "...", "note": "...", '
+                            '"question": "...", "source_ids": []}]}'
+                        ),
                     })
-                    continue
-                else:
-                    return [], False
+                continue
 
             observations = validate_and_convert_observations(
                 raw_observations, len(paragraphs)
             )
-            return observations, True
+            
+            if not observations:
+                logger.warning(f"No valid observations (attempt {attempt + 1}/{max_retries})")
+                last_error = "AI returned no valid observations"
+                if attempt < max_retries - 1:
+                    messages.append({
+                        "role": "user",
+                        "content": "Please provide at least one observation.",
+                    })
+                continue
+
+            return observations, True, None
 
         except Exception as e:
-            logger.error(f"OpenAI API error: {e}")
+            logger.error(f"OpenAI API error (attempt {attempt + 1}/{max_retries}): {e}")
+            last_error = f"AI service error: {type(e).__name__}"
             if attempt < max_retries - 1:
                 continue
-            return [], False
+            return [], False, last_error
 
-    return [], False
+    return [], False, f"{last_error} after {max_retries} attempts"

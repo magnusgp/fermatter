@@ -126,6 +126,9 @@ class Meta(BaseModel):
     paragraph_count: int = Field(..., ge=0, description="Total number of paragraphs")
     latency_ms: int = Field(default=0, ge=0, description="Analysis latency in ms")
     used_llm: bool = Field(default=False, description="Whether LLM was used")
+    warning: Optional[str] = Field(
+        default=None, description="Warning message if LLM analysis had issues"
+    )
 
 
 class AnalyzeResponse(BaseModel):
