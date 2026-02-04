@@ -82,6 +82,9 @@ export function FeedbackPanel({
 
   const hasContent = observations.length > 0
 
+  // Debug: log what we receive
+  console.log('FeedbackPanel received:', { observations: observations.length, isLoading, meta })
+
   return (
     <Card className="h-full flex flex-col">
       <CardHeader className="pb-3">
