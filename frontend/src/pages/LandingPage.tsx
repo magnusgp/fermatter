@@ -17,11 +17,13 @@ import {
   ArrowRight,
   Sparkles,
   BookOpen,
-  Users,
-  Star,
   FileText,
   LogOut,
   Loader2,
+  Github,
+  Chrome,
+  FileType,
+  Blocks,
 } from "lucide-react"
 import { useEffect, useRef } from "react"
 
@@ -160,24 +162,24 @@ export function LandingPage() {
         <div className="container mx-auto px-4">
           <div className="text-center mb-12">
             <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-8">
-              Trusted by writers who care about their voice
+              Open, extensible, and built for your workflow
             </h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-8 items-center justify-items-center opacity-60">
               <div className="flex items-center gap-2">
-                <Users className="w-5 h-5" />
-                <span className="font-medium">10k+ Writers</span>
+                <Github className="w-5 h-5" />
+                <span className="font-medium">Open Source</span>
               </div>
               <div className="flex items-center gap-2">
-                <BookOpen className="w-5 h-5" />
-                <span className="font-medium">500k+ Documents</span>
+                <Chrome className="w-5 h-5" />
+                <span className="font-medium">Browser Plugin</span>
               </div>
               <div className="flex items-center gap-2">
-                <Star className="w-5 h-5 fill-current" />
-                <span className="font-medium">4.9/5 Rating</span>
+                <FileType className="w-5 h-5" />
+                <span className="font-medium">Word Plugin</span>
               </div>
               <div className="flex items-center gap-2">
-                <MessageSquare className="w-5 h-5" />
-                <span className="font-medium">2M+ Feedbacks</span>
+                <Blocks className="w-5 h-5" />
+                <span className="font-medium">Extensible API</span>
               </div>
             </div>
           </div>
@@ -490,7 +492,7 @@ export function LandingPage() {
             </div>
           </div>
           <div className="mt-12 pt-8 border-t text-center text-sm text-muted-foreground">
-            <p>© 2024 Fermatter. All rights reserved.</p>
+            <p>© 2026 Fermatter. All rights reserved.</p>
           </div>
         </div>
       </footer>
