@@ -10,8 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import type { SourcesInput, AnalysisMode } from '@/lib/types'
 import { BookOpen, Check, ExternalLink } from 'lucide-react'
-import { getSources } from '@/lib/api'
-import type { LibrarySource } from '@/lib/types'
+import { getBuiltInSources, type LibrarySource } from '@/lib/sources'
 
 interface SettingsDialogProps {
   open: boolean
@@ -37,11 +36,9 @@ export function SettingsDialog({
   const [librarySources, setLibrarySources] = useState<LibrarySource[]>([])
   const [userSourcesText, setUserSourcesText] = useState(sources.user.join('\n'))
 
-  // Fetch library sources
+  // Load built-in library sources
   useEffect(() => {
-    getSources()
-      .then((res) => setLibrarySources(res.sources))
-      .catch((err) => console.error('Failed to fetch sources:', err))
+    setLibrarySources(getBuiltInSources())
   }, [])
 
   // Sync userSourcesText when sources prop changes
