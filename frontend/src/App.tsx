@@ -73,6 +73,7 @@ function App() {
     createSnapshot()
     
     try {
+      console.log('Sending analyze request:', { text: text.substring(0, 100), mode, sources })
       const result = await analyzeText({
         text,
         snapshots,
@@ -80,6 +81,8 @@ function App() {
         sources,
         scope: { type: 'document' },
       })
+      console.log('Analysis result:', JSON.stringify(result, null, 2))
+      console.log('Observations count:', result.observations?.length)
       setAnalysisResult(result)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to analyze text'
