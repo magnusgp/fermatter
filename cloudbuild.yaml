@@ -19,6 +19,8 @@ steps:
     id: "build-frontend"
     args:
       - "build"
+      - "-f"
+      - "Dockerfile.prod"
       - "--build-arg"
       - "VITE_API_BASE_URL=https://backend-api-225093279154.europe-west6.run.app"
       - "-t"
